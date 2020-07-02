@@ -1,8 +1,11 @@
 package edu.agus.epam
 
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.{GroupState, GroupStateTimeout}
+import edu.agus.epam.implicits.ImplicitDFOperations._
+
+import scala.annotation.tailrec
 
 case class InputRow(hotel_id: Long, Name: String, stay: Long)
 case class State(hotel_id: Long,
@@ -14,18 +17,28 @@ case class State(hotel_id: Long,
                  var longStay: Long = 0)
 
 object App {
-  // TODO: Looks like Algebraic Data type
-  private val PredicateError: Column = col("stay") <= 0 or col("stay") > 30
-  private val PredicateShort: Column = col("stay") === 1
-  private val PredicateStandart: Column = col("stay") >= 2 && col("stay") <= 7
-  private val PredicateStandartExtendable: Column = col("stay") > 7 && col("stay") < 14
-  private val PredicateLong: Column = col("stay") >= 14 && col("stay") <= 28
+  private val predicateList = List(
+    ErrorPredicate(),
+    ShortPredicate(),
+    StandardPredicate(),
+    StandardExtendablePredicate(),
+    LongPredicate()
+  )
 
-  private val Year2016Path = "hdfs://sandbox-hdp:8020/user/hadoop/modify/year=2016"
-  private val Year2017Path = "hdfs://sandbox-hdp:8020/user/hadoop/modify/year=2017"
+  @tailrec
+  def batchStates(recursionBase: DataFrame, predicates: List[Predicate], states: List[DataFrame] = Nil): List[DataFrame] = {
+    predicates match {
+      case x :: xs => batchStates(recursionBase, xs, recursionBase.batchStateAggregation(x) :: states)
+      case Nil => states
+    }
+  }
 
-  private val BatchOutput = "hdfs://sandbox-hdp:8020/user/hadoop/streaming/batch"
-  private val StreamingOutput = "hdfs://sandbox-hdp:8020/user/hadoop/streaming/stream"
+  private val DefaultHDFSPath = "hdfs://sandbox-hdp:8020/user/hadoop/"
+  private val Year2016Path = s"${DefaultHDFSPath}modify/year=2016"
+  private val Year2017Path = s"${DefaultHDFSPath}modify/year=2017"
+
+  private val BatchOutput = s"${DefaultHDFSPath}streaming/batch"
+  private val StreamingOutput = s"${DefaultHDFSPath}streaming/stream"
 
   def batchDataPrep(bookingDf: DataFrame, hotelDf: DataFrame): DataFrame = {
     bookingDf.join(hotelDf, col("hotel_id") === hotelDf("Id")
@@ -37,18 +50,16 @@ object App {
       .drop(hotelDf("Id"))
   }
 
-  def batchStateAggregation(df: DataFrame, predicate: Column)(colName: String) = {
-    df
-      .select("hotel_id", "Name", "stay")
-      .where(predicate)
-      .groupBy("hotel_id", "Name")
-      .agg(count("stay") as colName)
-      .drop("stay")
-      .distinct()
-  }
-
   def main(args: Array[String]) = {
-    val sparkSession = SparkSession.builder().appName("app-name").getOrCreate()
+    val outputTypeText = args(0) toUpperCase
+    val outputType: OutputType = outputTypeText match {
+      case "HDFS" => HDFS(s"$DefaultHDFSPath${args(1)}")
+      case "ELK" => ElasticSearch(host = args(1), index = args(2))
+    }
+    val sparkSession = SparkSession
+      .builder()
+      .appName("WriteToHDFS")
+      .getOrCreate()
     val df2016 = sparkSession.read.parquet(Year2016Path)
 
     debugLog(
@@ -88,19 +99,8 @@ object App {
       "DataFrame for 2016 with joined weather"
     )(joined2016)
 
-    val err2016 = batchStateAggregation(joined2016, PredicateError)("errorStay")
-    val short2016 = batchStateAggregation(joined2016, PredicateShort)("shortStay")
-    val standart2016 = batchStateAggregation(joined2016, PredicateStandart)("standartStay")
-    val standartExtendable2016 =
-      batchStateAggregation(joined2016, PredicateStandartExtendable)("standartExtendableStay")
-    val long2016 = batchStateAggregation(joined2016, PredicateLong)("longStay")
-
-    val state2016 = err2016
-      .join(short2016, err2016("hotel_id") === short2016("hotel_id"))
-      .join(standart2016, err2016("hotel_id") === standart2016("hotel_id"))
-      .join(standartExtendable2016, err2016("hotel_id") === standartExtendable2016("hotel_id"))
-      .join(long2016, err2016("hotel_id") === long2016("hotel_id"))
-
+    val statesList = batchStates(joined2016, predicateList)
+    val state2016 = statesList.reduce((x, y) => x.join(y, Seq("hotel_id", "Name")))
     debugLog(
       "Schema for 2016 state",
       "2016 state"
@@ -123,7 +123,6 @@ object App {
       .format("parquet")
       .option("path", StreamingOutput)
       .start
-
     query.awaitTermination()
   }
 

@@ -69,6 +69,11 @@
       <artifactId>parquet-avro</artifactId>
       <version>1.11.0</version>
     </dependency>
+    <dependency>
+      <groupId>org.elasticsearch</groupId>
+      <artifactId>elasticsearch-spark-20_2.11</artifactId>
+      <version>7.8.0</version>
+    </dependency>
 
   </dependencies>
   
