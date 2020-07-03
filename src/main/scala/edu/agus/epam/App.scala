@@ -1,9 +1,9 @@
 package edu.agus.epam
 
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
+import edu.agus.epam.implicits.ImplicitDFOperations._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.{GroupState, GroupStateTimeout}
-import edu.agus.epam.implicits.ImplicitDFOperations._
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import scala.annotation.tailrec
 
