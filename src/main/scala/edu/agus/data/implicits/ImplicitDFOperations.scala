@@ -1,12 +1,12 @@
-package edu.agus.epam.implicits
+package edu.agus.data.implicits
 
-import edu.agus.epam.{ErrorPredicate, LongPredicate, Predicate, ShortPredicate, StandardPredicate, StandardExtendablePredicate}
+import edu.agus.data.{ErrorPredicate, LongPredicate, PredicateAlgebra, ShortPredicate, StandardExtendablePredicate, StandardPredicate}
 import org.apache.spark.sql.functions.count
 import org.apache.spark.sql.{Column, DataFrame}
 
 object ImplicitDFOperations {
   implicit class ImplicitDF(df: DataFrame) {
-    def batchStateAggregation(predicateObj: Predicate) = {
+    def batchStateAggregation(predicateObj: PredicateAlgebra) = {
       val colName = predicateObj match {
         case _: ErrorPredicate => "errorStay"
         case _: ShortPredicate => "shortStay"
