@@ -1,0 +1,1 @@
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.11:2.3.1 --class edu.agus.data.App --master yarn-client --num-executors 1 --driver-memory 4g --executor-memory 4g --executor-cores 1 spark-streaming-1.0-SNAPSHOT-jar-with-dependencies.jar HDFS state

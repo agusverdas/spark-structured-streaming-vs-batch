@@ -1,7 +1,6 @@
 package edu.agus.data
 
-import com.sun.javaws.exceptions.InvalidArgumentException
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.SparkSession
 
 object Util {
   private val DefaultHDFSPath = "hdfs://sandbox-hdp:8020/user/hadoop/"
@@ -37,7 +36,7 @@ object Util {
     val outputType: OutputType = outputTypeText match {
       case "HDFS" => HDFS(s"$DefaultHDFSPath${args(1)}")
       case "ELK" => ElasticSearch(host = args(1), index = args(2))
-      case _ => throw new InvalidArgumentException(Array("Invalid input source(app is working with 'ELK' or 'HDFS' sources)"))
+      case _ => throw new IllegalArgumentException("Invalid input source(app is working with 'ELK' or 'HDFS' sources)")
     }
     outputType
   }
